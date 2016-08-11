@@ -98,19 +98,6 @@ It will generate two report, One contains only number of samples executed inform
 
 
 
+## Emails
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+Sending email code is availble in build.xml we need to provide smtp details in it.Email will be send with embeeded report in email body.
