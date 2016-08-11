@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testResults version="1.2">
+<sample t="653" it="0" lt="0" ts="1470908601719" s="true" lb="Get details from Excel" rc="200" rm="OK" tn="Search jmeter tutorials 1-1" dt="text" by="0" ng="1" na="1"/>
+<httpSample t="2286" it="0" lt="2286" ts="1470908602443" s="true" lb="61/complete/search_Jmeter tutorial" rc="200" rm="OK" tn="Search jmeter tutorials 1-1" dt="text" by="943" ng="1" na="1"/>
+
+</testResults>

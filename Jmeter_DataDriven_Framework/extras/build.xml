@@ -1,0 +1,301 @@
+<?xml version="1.0"?>
+<!--
+   Licensed to the Apache Software Foundation (ASF) under one or more
+   contributor license agreements.  See the NOTICE file distributed with
+   this work for additional information regarding copyright ownership.
+   The ASF licenses this file to You under the Apache License, Version 2.0
+   (the "License"); you may not use this file except in compliance with
+   the License.  You may obtain a copy of the License at
+ 
+       http://www.apache.org/licenses/LICENSE-2.0
+ 
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+<project name="ant-jmeter" default="all">
+	<description>
+	
+		Sample build file for use with ant-jmeter.jar
+		See http://www.programmerplanet.org/pages/projects/jmeter-ant-task.php
+		
+	To run a test and create the output report:
+		ant -Dtest=script
+	
+	To run a test only:
+		ant -Dtest=script run
+		
+	To run report on existing test output
+		ant -Dtest=script report
+	
+	The "script" parameter is the name of the script without the .jmx suffix.
+	
+	Additional options:
+		-Dshow-data=y - include response data in Failure Details
+		-Dtestpath=xyz - path to test file(s) (default user.dir).
+		                 N.B. Ant interprets relative paths against the build file
+		-Djmeter.home=.. - path to JMeter home directory (defaults to parent of this build file)
+        -Dreport.title="My Report" - title for html report (default is 'Load Test Results')
+
+		Deprecated:
+		-Dformat=2.0 - use version 2.0 JTL files rather than 2.1
+
+	</description>
+	<property file="${propertyfilepath}/config.properties" />
+	<property name="testpath" value="${user.dir}/" />
+	<property name="jmeter.home" value="${basedir}/.." />
+	<property name="resultspath" value="${basedir}/../com/proj/results" />
+	<property name="oldresultspath" value="${basedir}/../com/proj/results/oldresults" />
+	<property name="report.title" value="Cirrus API Sanity Test Results" />
+	<property name="stylesheetpath" value="${basedir}/../com/proj/stylesheet" />
+	<property name="jtlfilepath" value="${basedir}/../com/proj/jtlfiles" />
+	<property name="logspath" value="${basedir}/../com/proj/logs" />
+	<property name="testcasepath" value="${basedir}/../com/proj/testsuite" />
+	<property name="propertyfilepath" value="${basedir}/../com/proj/config" />
+	
+	
+
+	<!-- Should report include response data for failures? -->
+	<property name="show-data" value="n" />
+
+	<property name="format" value="2.1" />
+
+	<condition property="style_version" value="">
+		<equals arg1="${format}" arg2="2.0" />
+	</condition>
+
+	<condition property="style_version" value="_21">
+		<equals arg1="${format}" arg2="2.1" />
+	</condition>
+
+	<condition property="funcMode">
+		<equals arg1="${show-data}" arg2="y" />
+	</condition>
+
+	<condition property="funcMode" value="false">
+		<not>
+			<equals arg1="${show-data}" arg2="y" />
+		</not>
+	</condition>
+
+	<!-- Allow jar to be picked up locally -->
+	<path id="jmeter.classpath">
+		<fileset dir="${basedir}">
+			<include name="ant-jmeter*.jar" />
+		</fileset>
+	</path>
+
+	<taskdef name="jmeter" classpathref="jmeter.classpath" classname="org.programmerplanet.ant.taskdefs.jmeter.JMeterTask" />
+
+	
+
+<!--Execute Google Script -->	
+	<target name="setvalue">
+		<echo>Running scripts in QA environment</echo>
+		<property file="${propertyfilepath}/config.properties" />
+		<!-- Name of test (without .jmx) -->
+		<property name="env" value="${environment}"/>
+		<property name="buildno" value="${buildnumber}"/>
+		<property name="test" value="${filename}" />
+		<property name="oldresultspath" value="${oldresultspath}" />
+		<property name="mailstylesheet" value="${stylesheetname}"/>
+		<property name="detailstylesheet" value="${detail_stylesheet}"/>
+	</target>
+	
+ 	<target name="all" depends="setvalue,run,report,move_results,delete_results" />
+	
+	<target name="run">
+		<echo>funcMode = ${funcMode}</echo>
+		<jmeter 
+			jmeterhome="${jmeter.home}" 
+			testplan="${testcasepath}/${test}.jmx" 
+			resultlog="${jtlfilepath}/${test}.jtl" 
+			jmeterlogfile="${logspath}/${test}.log">
+			<!--
+			<jvmarg value="-Xincgc"/>
+			<jvmarg value="-Xmx128m"/>
+			<jvmarg value="-Dproperty=value"/>
+			<jmeterarg value="-qextra.properties"/>
+		-->
+			<!-- Force suitable defaults -->
+			<property name="jmeter.save.saveservice.output_format" value="xml" />
+			<property name="jmeter.save.saveservice.assertion_results" value="all" />
+			<property name="jmeter.save.saveservice.bytes" value="true" />
+			<property name="file_format.testlog" value="${format}" />
+			<property name="jmeter.save.saveservice.response_data.on_error" value="${funcMode}" />
+		</jmeter>
+	</target>
+
+	<property name="lib.dir" value="${jmeter.home}/lib" />
+
+	<!-- Use xalan copy from JMeter lib directory to ensure consistent processing with Java 1.4+ -->
+	<path id="xslt.classpath">
+		<fileset dir="${lib.dir}" includes="xalan*.jar" />
+		<fileset dir="${lib.dir}" includes="serializer*.jar" />
+	</path>
+
+	<tstamp>
+		<format property="report.datestamp" pattern="yyyy-MM-dd_HH-mm-ss" />
+		<format property="current.time" pattern="MM/dd/yyyy hh:mm:ss aa" />
+	</tstamp>
+
+	<target name="report" depends="xslt-report,copy-images">
+		<echo>Report generated at ${current.time}</echo>
+	</target>
+	
+	<target name="xslt-report" depends="_message_xalan">
+
+		<!--	<xslt
+			classpathref="xslt.classpath"
+			force="true"
+		    in="${jtlfilepath}/${test}.jtl"
+		    out="${resultspath}/${test}_Summary.html"
+		    style="${stylesheetpath}/testjmeter-results-shanhe-me.xsl">
+			<param name="showData" expression="${show-data}"/>
+			<param name="titleReport" expression="${report.title}"/>
+			<param name="dateReport" expression="${report.datestamp}"/>
+		</xslt> -->
+		<xslt classpathref="xslt.classpath" 
+		force="true" 
+		in="${jtlfilepath}/${test}.jtl" 
+		out="${resultspath}/${test}_result.html" 
+		style="${stylesheetpath}/${mailstylesheet}">
+			<param name="showData" expression="${show-data}" />
+			<param name="titleReport" expression="${report.title}" />
+			<param name="dateReport" expression="${report.datestamp}" />
+		</xslt>
+		
+		<xslt classpathref="xslt.classpath" 
+		force="true" 
+		in="${jtlfilepath}/${test}.jtl" 
+		out="${resultspath}/${test}_summary.html" 
+		style="${stylesheetpath}/${detailstylesheet}">
+			<param name="showData" expression="${show-data}" />
+			<param name="titleReport" expression="${report.title}" />
+			<param name="dateReport" expression="${report.datestamp}" />
+		</xslt>
+		<!--
+		<xslt classpathref="xslt.classpath" 
+		force="true" 
+		in="${jtlfilepath}/${test}.jtl" 
+		out="${resultspath}/${test}_detail.html" 
+		style="${stylesheetpath}/${detail_stylesheet}">
+			<param name="showData" expression="${show-data}" />
+			<param name="titleReport" expression="${report.title}" />
+			<param name="dateReport" expression="${report.datestamp}" />
+		</xslt>-->
+		
+		
+	</target>
+
+	<!-- Deleting existing Jtl files -->
+	<target name="delete_results">
+		<echo>Deleting the existing results from result folder</echo>
+		<delete>
+			<fileset file="${jtlfilepath}\${test}*.jtl" includes="test*" />
+			<fileset file="${resultspath}\${test}*.html" includes="test*" />
+			<fileset file="${logspath}\${test}*.log" includes="test*" />
+		</delete>
+		<echo>Deleting the existing results from result folder- completed</echo>
+	</target>
+
+
+	<!-- Moving results to old results folder -->
+	<target name="move_results" depends="move_logs,move_jtl">
+		<echo>Moving HTML results to the folders with time stamp</echo>
+		<mkdir dir="${oldresultspath}/Results${report.datestamp}" />
+		<move todir="${oldresultspath}/Results${report.datestamp}">
+			<fileset dir="${resultspath}" />
+			<mapper type="glob" from="${test}*.html" to="${test}*.html" />
+		</move>
+	</target>
+
+	<target name="move_logs">
+		<echo>Moving LOGS to the folders with time stamp</echo>
+		<mkdir dir="${oldresultspath}/Results${report.datestamp}" />
+		<move todir="${oldresultspath}/Results${report.datestamp}">
+			<fileset dir="${logspath}" />
+			<mapper type="glob" from="${test}.log" to="${test}.log" />
+		</move>
+	</target>
+	
+	<target name="move_jtl">
+		<echo>Moving JTL results to the folders with time stamp</echo>
+		<mkdir dir="${oldresultspath}/Results${report.datestamp}" />
+		<move todir="${oldresultspath}/Results${report.datestamp}">
+			<fileset dir="${jtlfilepath}" />
+			<mapper type="glob" from="${test}.jtl" to="${test}.jtl" />
+		</move>
+	</target>
+
+	
+	<!-- Moving results to drop box results folder -->
+	<target name="move_results_dropbox">
+		<echo>Moving HTML results to the folders to dropbox</echo>
+		
+		<copy todir="Z:/Results/JmeterResults/Results${report.datestamp}">
+		
+    	<fileset dir="${oldresultspath}/Results${report.datestamp}/"/>
+  		</copy>
+		
+		<copy todir="Z:/Results/JmeterResults/LastExecution/Results">
+    	<fileset dir="${oldresultspath}/Results${report.datestamp}/"/>
+  		</copy>
+		
+	</target>
+	
+	
+	
+	<!-- sending email -->
+
+	<target name="mail">
+	<loadfile property="html_text" srcFile="${oldresultspath}/Results${report.datestamp}/${test}_result.html"/>
+		<mail mailhost="******" mailport="****" subject="API Automation results : ${test}*** ${buildno}** ${current.time}" enableStartTLS="false">
+			<from address="xxxx@gmail.com" />
+			<replyto address="xxxx@gmail.com" />
+			<to address="xxxx@gmail.com" />
+			
+			<message mimetype="text/html">
+			Hi Team,&lt;br>&lt;br>&lt;br>
+			
+			Jenkins has executed the ${test} Scripts on PUNE${environment} Environment (${buildnumber}) at ${current.time}. &lt;br>&lt;br>
+			Please find the following results.&lt;br>&lt;br>
+			
+		
+		Thanks and Regards,&lt;br>
+		QA Team
+			</message>
+		</mail>
+	</target>
+
+	<!-- Copy report images if needed -->
+	<target name="copy-images" depends="verify-images" unless="samepath">
+		<copy file="${basedir}/expand.png" tofile="${testpath}/expand.png" />
+		<copy file="${basedir}/collapse.png" tofile="${testpath}/collapse.png" />
+	</target>
+
+	<target name="verify-images">
+		<condition property="samepath">
+			<equals arg1="${testpath}" arg2="${basedir}" />
+		</condition>
+	</target>
+
+	<!-- Check that the xalan libraries are present -->
+	<condition property="xalan.present">
+		<and>
+			<!-- No need to check all jars; just check a few -->
+			<available classpathref="xslt.classpath" classname="org.apache.xalan.processor.TransformerFactoryImpl" />
+			<available classpathref="xslt.classpath" classname="org.apache.xml.serializer.ExtendedContentHandler" />
+		</and>
+	</condition>
+
+	<target name="_message_xalan" unless="xalan.present">
+		<echo>Cannot find all xalan and/or serialiser jars</echo>
+		<echo>The XSLT formatting may not work correctly.</echo>
+		<echo>Check you have xalan and serializer jars in ${lib.dir}</echo>
+	</target>
+
+
+</project>
