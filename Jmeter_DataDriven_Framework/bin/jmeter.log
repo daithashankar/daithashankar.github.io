@@ -7,7 +7,6 @@
 2016/08/11 15:18:54 INFO  - jmeter.JMeter: java.vm.name=Java HotSpot(TM) Client VM 
 2016/08/11 15:18:54 INFO  - jmeter.JMeter: os.name=Windows 7 
 2016/08/11 15:18:54 INFO  - jmeter.JMeter: os.arch=x86 
-2016/08/11 15:18:54 INFO  - jmeter.JMeter: os.version=6.1 
 2016/08/11 15:18:54 INFO  - jmeter.JMeter: file.encoding=Cp1252 
 2016/08/11 15:18:54 INFO  - jmeter.JMeter: Max memory     =259522560 
 2016/08/11 15:18:54 INFO  - jmeter.JMeter: Available Processors =4 
